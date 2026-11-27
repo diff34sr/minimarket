@@ -1,0 +1,465 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Minimarket · Gestión</title>
+<link rel="manifest" href="admin.webmanifest">
+<link rel="icon" href="img/icon-admin-256.png">
+<link rel="apple-touch-icon" href="img/icon-admin-256.png">
+<meta name="theme-color" content="#1d5fd6">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="stylesheet" href="app.css">
+<script src="api.js"></script>
+<script src="scanner.js"></script>
+<style>
+  .admin { display: grid; grid-template-columns: minmax(0, 1fr); min-height: 100dvh; }
+  .side { position: fixed; bottom: 0; left: 0; right: 0; z-index: 10; display: flex; flex-direction: row; justify-content: space-around; gap: 6px; padding: 6px 6px calc(6px + env(safe-area-inset-bottom)); background: var(--surface); border-top: 1px solid var(--line); }
+  .side .brand, .side .bottom { display: none; }
+  .nav { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 56px; border-radius: 14px; font-weight: 700; color: var(--muted); text-decoration: none; transition: background .2s, color .2s; position: relative; }
+  .nav.on { background: var(--accent-soft); color: var(--accent); }
+  .nav .ic { font-size: 20px; width: 24px; text-align: center; }
+  .nav .label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .content { padding: 20px var(--pad) 100px; max-width: 1180px; width: 100%; }
+  .view { animation: rise .4s var(--ease); }
+  .head { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 20px; }
+  .head h1 { margin: 0; flex: 1; min-width: 0; }
+  .rows { display: grid; gap: 8px; }
+  .item { display: grid; grid-template-columns: 56px minmax(0, 1fr) auto auto; align-items: center; gap: 14px; padding: 10px 14px 10px 10px; border-radius: 16px; background: var(--surface); box-shadow: var(--shadow); cursor: pointer; transition: transform .12s; animation: rise .35s var(--ease) both; animation-delay: calc(var(--i) * 20ms); text-align: left; width: 100%; }
+  .item:active { transform: scale(.99); }
+  .thumb { width: 56px; height: 56px; border-radius: 12px; display: grid; place-items: center; background: var(--surface-2); font-size: 30px; overflow: hidden; }
+  .item small { display: block; color: var(--muted); }
+  .tag { padding: 4px 10px; border-radius: 99px; background: var(--surface-2); font-size: 12px; font-weight: 800; color: var(--muted); }
+  .tag.role-admin { background: var(--accent-soft); color: var(--accent); }
+
+  .prow { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px 12px; padding: 12px 14px; border-radius: 16px; background: var(--surface); box-shadow: var(--shadow); }
+  .prow.off { opacity: .5; }
+  .prow .main { display: grid; gap: 2px; text-align: left; min-width: 0; min-height: 48px; align-content: center; }
+  .prow .main small { color: var(--muted); overflow-wrap: anywhere; }
+  .prow .stk { font-size: 22px; font-weight: 900; }
+  .prow .stk.neg { color: var(--red); }
+  .prow .acts { grid-column: 1 / -1; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 8px; }
+  .prow .acts .btn { min-height: 48px; }
+  .dline { container-type: inline-size; padding: 12px; border-radius: 16px; background: var(--surface-2); margin-bottom: 10px; }
+  .dline .dh { display: flex; align-items: center; gap: 8px; }
+  .dline .dh > span { flex: 1; min-width: 0; }
+  .dline .dh small { display: block; color: var(--muted); }
+  .dline .dg { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0 10px; }
+  @container (min-width: 300px) { .dline .dg { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  .dline .dg .field { margin: 8px 0 0; min-width: 0; }
+  .dline .dg .qty { grid-column: 1 / -1; margin-top: 8px; min-height: 48px; }
+  .dline .input { font-size: 16px; min-height: 46px; padding: 0 10px; }
+  #res { display: grid; gap: 6px; margin: 6px 0; }
+  .field { grid-template-columns: minmax(0, 1fr); }
+  .field .seg { flex-wrap: wrap; }
+  .field .seg button { flex: 1 1 auto; min-width: 0; white-space: normal; }
+  .dtot { display: flex; justify-content: space-between; align-items: baseline; margin: 14px 0; font-size: 22px; font-weight: 900; }
+  .crow { display: grid; grid-template-columns: 1fr 52px; gap: 8px; margin-bottom: 8px; }
+  .field.sw { display: flex; justify-content: space-between; align-items: center; min-height: 44px; }
+  .findrow { display: grid; grid-template-columns: 1fr auto; gap: 8px; margin-bottom: 8px; }
+  .switch { appearance: none; width: 52px; height: 32px; border-radius: 99px; background: var(--line); position: relative; transition: background .25s; cursor: pointer; }
+  .switch::after { content: ''; position: absolute; top: 3px; left: 3px; width: 26px; height: 26px; border-radius: 50%; background: #fff; box-shadow: 0 2px 6px rgb(0 0 0 / .25); transition: transform .3s var(--spring); }
+  .switch:checked { background: var(--green); }
+  .switch:checked::after { transform: translateX(20px); }
+
+  .empty-msg, .muted { color: var(--muted); }
+  .neg { color: var(--red); }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr)); gap: 10px; margin-bottom: 14px; }
+  .stat { padding: 12px 14px; border-radius: 16px; background: var(--surface); box-shadow: var(--shadow); min-width: 0; }
+  .stat small { display: block; color: var(--muted); font-weight: 700; }
+  .stat b { font-size: 22px; font-weight: 900; overflow-wrap: anywhere; }
+  .panel { padding: 14px; border-radius: 16px; background: var(--surface); box-shadow: var(--shadow); margin-bottom: 14px; min-width: 0; }
+  .panel h3 { font-size: 16px; }
+  .two { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 14px; align-items: start; }
+  .two > .panel { margin-bottom: 0; }
+  .tw { overflow-x: auto; }
+  .tw table.list td, .tw table.list th { padding: 8px 8px; }
+  .brow { margin-bottom: 14px; display: grid; gap: 4px; }
+  .bh { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+  .bar { height: 10px; border-radius: 99px; background: var(--surface-2); overflow: hidden; margin-top: 4px; }
+  .bar i { display: block; height: 100%; background: var(--accent); border-radius: 99px; }
+  .bar.m i { background: var(--green); }
+  .lnk { text-decoration: underline; font-weight: 700; color: var(--accent); min-height: 44px; }
+  .prow.void .main b, .prow.void .stk { text-decoration: line-through; color: var(--muted); }
+
+  @media (min-width: 860px) {
+    .admin { grid-template-columns: 240px minmax(0, 1fr); }
+    .side { position: sticky; top: 0; bottom: auto; left: auto; right: auto; z-index: auto; height: 100dvh; flex-direction: column; justify-content: flex-start; gap: 6px; padding: 20px 14px; border-top: 0; border-right: 1px solid var(--line); }
+    .side .brand { display: inline-flex; margin: 0 8px 18px; }
+    .side .bottom { display: flex; margin-top: auto; gap: 8px; align-items: center; }
+    .nav { flex: none; flex-direction: row; justify-content: flex-start; gap: 12px; min-height: 52px; padding: 0 14px; border-radius: 14px; }
+    .nav .label { position: static; width: auto; height: auto; overflow: visible; clip-path: none; }
+  }
+</style>
+</head>
+<body>
+<div class="admin">
+  <nav class="side">
+    <span class="brand"><span class="chick" aria-hidden="true">🛒</span>Minimarket</span>
+    <a class="nav" href="#stock"><span class="ic">📦</span><span class="label">Stock</span></a>
+    <a class="nav" href="#proveedores"><span class="ic">🚚</span><span class="label">Proveedores</span></a>
+    <a class="nav" data-admin href="#ventas"><span class="ic">🧾</span><span class="label">Ventas</span></a>
+    <a class="nav" data-admin href="#reportes"><span class="ic">📈</span><span class="label">Reportes</span></a>
+    <a class="nav" data-admin href="#caja"><span class="ic">💵</span><span class="label">Caja</span></a>
+    <a class="nav" data-admin href="#usuarios"><span class="ic">👥</span><span class="label">Usuarios</span></a>
+    <div class="bottom">
+      <a class="btn ghost" href="pos.html" style="flex:1">← Caja</a>
+      <button class="iconbtn" data-theme-toggle aria-label="Cambiar tema"><span class="sun">☀︎</span><span class="moon">☾</span></button>
+      <button class="iconbtn" onclick="logout()" aria-label="Cerrar sesión">⏻</button>
+    </div>
+  </nav>
+  <main class="content" id="content"></main>
+</div>
+<script>
+const content = $('#content');
+let user, isAdmin;
+let q = '', cat = 0;
+const ADMIN_ONLY = ['ventas', 'reportes', 'caja', 'usuarios'];
+const call = (path, body) => api(path, body).catch(() => null);
+const stockText = p => `${Number(p.stock.toFixed(3))} ${p.unit}`;
+
+const views = {
+  async stock() {
+    content.innerHTML = `<section class="view">
+      <div class="head"><h1>Stock</h1>${isAdmin ? '<button class="btn" id="cats">Categorías</button>' : ''}<button class="btn" id="deliv">+ Entrega</button><button class="btn primary" id="new">+ Nuevo</button></div>
+      <div class="findrow"><input class="input" id="scan" type="search" placeholder="Escanear o buscar" autocomplete="off" value="${esc(q)}"><button class="btn" id="cam" aria-label="Escanear con la cámara"${useCamera ? '' : ' hidden'}>📷</button></div>
+      <div class="chips" id="chips"></div>
+      <div class="rows" id="rows"></div></section>`;
+    const scan = $('#scan'), rows = $('#rows'), chips = $('#chips');
+    let data = { categories: [], products: [] };
+    const catName = id => data.categories.find(c => c.id === id)?.name;
+    const paint = () => {
+      if (!data.categories.some(c => c.id === cat)) cat = 0;
+      chips.innerHTML = [{ id: 0, name: 'Todas' }, ...data.categories].map(c => `<button class="chip ${c.id === cat ? 'on' : ''}" data-c="${c.id}">${esc(c.name)}</button>`).join('');
+      const t = q.trim().toLowerCase();
+      const list = data.products.filter(p => (!cat || p.cat_id === cat) && (!t || [p.barcode, p.name, p.brand].some(v => String(v ?? '').toLowerCase().includes(t))));
+      rows.innerHTML = list.map(p => `<div class="prow ${p.active ? '' : 'off'}" data-id="${p.id}">
+        <button class="main" data-edit><b>${esc(p.name)}</b>
+          <small>${esc([p.brand, catName(p.cat_id), p.barcode].filter(Boolean).join(' · '))}</small>
+          <small>${money(p.price)}${p.unit === 'kg' ? ' /kg' : ''} · costo ${money(p.cost)}</small></button>
+        <span class="stk ${p.stock < 0 ? 'neg' : ''}">${stockText(p)}</span>
+        <div class="acts"><button class="btn" data-e>Entrega</button>${isAdmin ? '<button class="btn" data-a>Ajuste</button>' : ''}</div>
+      </div>`).join('') || '<p class="empty-msg">Sin productos</p>';
+    };
+    const refresh = async () => { data = (await call('/catalog')) || data; paint(); };
+    const after = ok => { if (ok) { q = ''; scan.value = ''; refresh(); scan.focus(); } };
+    scan.oninput = () => { q = scan.value; paint(); };
+    const open = v => {
+      const p = data.products.find(x => x.barcode === v);
+      if (p) entregaSheet(data.products, p).then(after);
+      else if (/^\d+$/.test(v)) editProduct({ barcode: v, name: '', brand: '', cat_id: cat || null, unit: 'u', price: '', cost: '', ask_qty: 0, active: 1, min_stock: 5 }, data.categories).then(after);
+    };
+    scan.onkeydown = e => { const v = scan.value.trim(); if (e.key === 'Enter' && v) open(v); };
+    $('#cam').onclick = async () => { const v = await scanOnce(); if (v) { scan.value = q = v; paint(); open(v); } };
+    chips.onclick = e => { const b = e.target.closest('[data-c]'); if (b) { cat = +b.dataset.c; paint(); } };
+    rows.onclick = e => {
+      const p = data.products.find(x => x.id === +e.target.closest('.prow')?.dataset.id);
+      if (!p) return;
+      if (e.target.closest('[data-e]')) entregaSheet(data.products, p).then(after);
+      else if (e.target.closest('[data-a]') && isAdmin) adjustSheet(p).then(after);
+      else if (e.target.closest('[data-edit]')) editProduct(p, data.categories).then(ok => ok && refresh());
+    };
+    $('#deliv').onclick = () => entregaSheet(data.products).then(after);
+    $('#new').onclick = () => editProduct({ name: '', brand: '', cat_id: cat || null, unit: 'u', price: '', cost: '', ask_qty: 0, active: 1, min_stock: 5 }, data.categories).then(ok => ok && refresh());
+    if (isAdmin) $('#cats').onclick = () => catSheet().then(refresh);
+    await refresh();
+    if (matchMedia('(pointer: fine)').matches) scan.focus();
+  },
+
+  async proveedores() {
+    const list = (await call('/suppliers?all=1')) || [];
+    content.innerHTML = `<section class="view">
+      <div class="head"><h1>Proveedores</h1><button class="btn primary" id="new">+ Nuevo</button></div>
+      <div class="rows">${list.map(x => `<div class="prow ${x.active ? '' : 'off'}" data-id="${x.id}">
+        <button class="main" data-edit><b>${esc(x.name)}</b><small>${esc(x.phone)}</small><small>${esc(x.note)}</small></button></div>`).join('') || '<p class="empty-msg">Sin proveedores</p>'}</div></section>`;
+    const open = x => editSupplier(x).then(ok => ok && views.proveedores());
+    $('#new').onclick = () => open({ name: '', phone: '', note: '', active: 1 });
+    content.querySelector('.rows').onclick = e => {
+      const row = e.target.closest('.prow');
+      if (row) open(list.find(x => x.id === +row.dataset.id));
+    };
+  },
+
+  async usuarios() {
+    const users = await api('/users');
+    content.innerHTML = `<section class="view">
+      <div class="head"><h1>Usuarios</h1><button class="btn primary" id="new">+ Nuevo</button></div>
+      <div class="rows">${users.map((u, i) => `<div class="item" data-id="${u.id}" style="--i:${i}">
+        <span class="thumb" style="font-size:22px;font-weight:900">${esc(u.name[0])}</span>
+        <span><b>${esc(u.name)}</b><small>PIN ••••</small></span>
+        <span class="tag ${u.role === 'admin' ? 'role-admin' : ''}">${u.role === 'admin' ? 'Administrador' : 'Cajero'}</span><span></span>
+      </div>`).join('')}</div></section>`;
+    $('#new').onclick = () => editUser({ name: '', role: 'cajero' });
+    content.querySelector('.rows').onclick = e => {
+      const row = e.target.closest('.item');
+      if (row) editUser(users.find(u => u.id === +row.dataset.id));
+    };
+  },
+};
+
+function editProduct(p, categories) {
+  const s = sheet(`<h2>${p.id ? 'Editar producto' : 'Nuevo producto'}</h2>
+    <label class="field"><span>Código de barras</span><input class="input" name="barcode" inputmode="numeric" autocomplete="off" value="${esc(p.barcode)}"></label>
+    <label class="field"><span>Nombre</span><input class="input" name="name" value="${esc(p.name)}" autofocus></label>
+    <label class="field"><span>Marca</span><input class="input" name="brand" value="${esc(p.brand)}"></label>
+    <label class="field"><span>Categoría</span><select class="input" name="cat_id"><option value="">Sin categoría</option>${categories.map(c => `<option value="${c.id}" ${c.id === p.cat_id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></label>
+    <div class="field"><span>Unidad</span><div class="seg"><button data-u="u">u</button><button data-u="kg">kg</button></div></div>
+    <label class="field"><span>Precio (Bs)</span><input class="input" name="price" type="number" inputmode="decimal" min="0" step="0.01" value="${p.price}"></label>
+    <label class="field"><span>Costo (Bs)</span><input class="input" name="cost" type="number" inputmode="decimal" min="0" step="0.01" value="${p.cost}"></label>
+    <label class="field"><span>Stock mínimo (para pedir)</span><input class="input" name="min_stock" type="number" inputmode="decimal" min="0" step="any" value="${p.min_stock ?? 5}"></label>
+    <label class="field sw"><span>Pedir cantidad</span><input type="checkbox" class="switch" name="ask_qty" ${p.ask_qty ? 'checked' : ''}></label>
+    <label class="field sw"><span>Activo</span><input type="checkbox" class="switch" name="active" ${p.active ? 'checked' : ''}></label>
+    <button class="btn primary big full" id="save">Guardar</button>`);
+  let unit = p.unit;
+  const locked = !!p.id && !isAdmin;
+  if (locked) ['barcode', 'price', 'cost', 'active'].forEach(n => (s.$(`[name=${n}]`).disabled = true));
+  const segs = s.el.querySelectorAll('[data-u]');
+  const pick = u => { unit = u; segs.forEach(b => b.classList.toggle('on', b.dataset.u === u)); };
+  segs.forEach(b => { b.disabled = locked; b.onclick = () => pick(b.dataset.u); });
+  pick(unit);
+  s.$('#save').onclick = async () => {
+    const f = n => s.$(`[name=${n}]`);
+    const price = f('price').valueAsNumber, cost = f('cost').value === '' ? 0 : f('cost').valueAsNumber, min_stock = f('min_stock').valueAsNumber;
+    if (!f('name').value.trim()) return shake(f('name'));
+    if (!locked && !(price >= 0)) return shake(f('price'));
+    if (!locked && !(cost >= 0)) return shake(f('cost'));
+    if (!(min_stock >= 0)) return shake(f('min_stock'));
+    const body = {
+      id: p.id, name: f('name').value.trim(), brand: f('brand').value.trim(),
+      cat_id: f('cat_id').value === '' ? null : Number(f('cat_id').value), min_stock, ask_qty: +f('ask_qty').checked,
+    };
+    if (!locked) Object.assign(body, { barcode: f('barcode').value.trim(), unit, price, cost, active: +f('active').checked });
+    const saved = await call('/products', body);
+    if (!saved) return;
+    toast('Producto guardado', 'ok');
+    s.close(true);
+  };
+  return s.done;
+}
+
+function adjustSheet(p) {
+  const grams = p.unit === 'kg';
+  let qty = 0, sign = -1;
+  const s = sheet(`<h2>Ajuste · ${esc(p.name)}</h2>
+    <p class="muted">Stock actual: ${stockText(p)}</p>
+    <div class="seg"><button data-s="-1">− Resta</button><button data-s="1">+ Suma</button></div>
+    <button class="btn big full" id="qty" style="margin-top:12px"></button>
+    <label class="field"><span>Motivo</span><input class="input" name="note" placeholder="Ej: merma, conteo, vencido"></label>
+    <button class="btn primary big full" id="save">Guardar</button>`);
+  const qtyBtn = s.$('#qty');
+  const paint = () => (qtyBtn.textContent = qty ? (grams ? `${qty} g` : qty) : 'Tocar para poner cantidad');
+  const segs = s.el.querySelectorAll('[data-s]');
+  const pick = v => { sign = v; segs.forEach(b => b.classList.toggle('on', +b.dataset.s === v)); };
+  segs.forEach(b => (b.onclick = () => pick(+b.dataset.s)));
+  pick(sign);
+  paint();
+  qtyBtn.onclick = async () => { qty = (await keypad(grams ? 'Cantidad (gramos)' : 'Cantidad', { grams })) ?? qty; paint(); };
+  s.$('#save').onclick = async () => {
+    if (!qty) return shake(qtyBtn);
+    const note = s.$('[name=note]');
+    if (!note.value.trim()) return shake(note);
+    if (!(await call('/stock/adjust', { product_id: p.id, qty: (grams ? qty / 1000 : qty) * sign, note: note.value.trim() }))) return;
+    toast('Ajuste registrado', 'ok');
+    s.close(true);
+  };
+  return s.done;
+}
+
+function entregaSheet(products, first) {
+  const lines = [];
+  const kg = l => l.p.unit === 'kg';
+  const s = sheet(`<h2>Entrega</h2>
+    <label class="field"><span>Proveedor</span><select class="input" name="sup"></select></label>
+    <div id="newsup" hidden>
+      <label class="field"><span>Nombre del proveedor</span><input class="input" name="supname"></label>
+      <label class="field"><span>Teléfono</span><input class="input" name="supphone" inputmode="tel"></label>
+    </div>
+    <input class="input" name="find" type="search" placeholder="Escanear o buscar" autocomplete="off">
+    <div id="res"></div>
+    <div id="lines"></div>
+    <div class="field"><span>Pago</span><div class="seg"><button data-p="efectivo_caja">Efectivo de caja</button><button data-p="qr_dueno">QR del dueño</button><button data-p="pendiente">Pendiente</button></div></div>
+    <div class="dtot"><span>Total</span><b id="tot"></b></div>
+    <button class="btn primary big full" id="save">Guardar</button>`);
+  const sup = s.$('[name=sup]'), find = s.$('[name=find]'), res = s.$('#res'), box = s.$('#lines');
+  let payment = 'efectivo_caja';
+  const supOptions = list => { const keep = sup.value; sup.innerHTML = '<option value="">Sin proveedor</option>' + list.map(x => `<option value="${x.id}">${esc(x.name)}</option>`).join('') + '<option value="new">+ Nuevo proveedor</option>'; sup.value = keep; };
+  supOptions([]);
+  call('/suppliers').then(list => list && supOptions(list));
+  sup.onchange = () => { s.$('#newsup').hidden = sup.value !== 'new'; if (sup.value === 'new') s.$('[name=supname]').focus(); };
+  const segs = s.el.querySelectorAll('[data-p]');
+  const pick = v => { payment = v; segs.forEach(b => b.classList.toggle('on', b.dataset.p === v)); };
+  segs.forEach(b => (b.onclick = () => pick(b.dataset.p)));
+  pick(payment);
+  const total = () => Math.round(lines.reduce((t, l) => t + (l.qty || 0) * (parseFloat(l.cost) || 0), 0) * 100) / 100;
+  const paintTotal = () => (s.$('#tot').textContent = money(total()));
+  const qtyText = l => (l.qty ? (kg(l) ? `${Math.round(l.qty * 1000)} g` : l.qty) : 'Tocar para poner cantidad');
+  const paint = () => {
+    box.innerHTML = lines.map((l, i) => `<div class="dline" data-i="${i}">
+      <div class="dh"><span><b>${esc(l.p.name)}</b><small>Sistema: ${stockText(l.p)}</small></span><button class="iconbtn" data-rm aria-label="Quitar">✕</button></div>
+      <div class="dg">
+        <button class="btn qty" data-q>${qtyText(l)}</button>
+        <label class="field"><span>Costo (Bs/${l.p.unit})</span><input class="input" data-f="cost" type="number" inputmode="decimal" min="0" step="any" value="${esc(l.cost)}"></label>
+        <label class="field"><span>Vence (opcional)</span><input class="input" data-f="exp" type="date" value="${esc(l.exp)}"></label>
+        <label class="field" style="grid-column:1/-1"><span>Conteo en estante (opcional, ${kg(l) ? 'gramos' : 'unidades'}) · sistema ${stockText(l.p)}</span><input class="input" data-f="counted" type="number" inputmode="decimal" min="0" step="1" value="${esc(l.counted)}"></label>
+      </div></div>`).join('');
+    paintTotal();
+  };
+  const add = p => {
+    if (!lines.some(l => l.p.id === p.id)) lines.push({ p, qty: 0, cost: p.cost || '', exp: '', counted: '' });
+    find.value = '';
+    res.innerHTML = '';
+    paint();
+  };
+  const matches = () => {
+    const t = find.value.trim().toLowerCase();
+    return t ? products.filter(p => p.active && [p.barcode, p.name, p.brand].some(v => String(v ?? '').toLowerCase().includes(t))) : [];
+  };
+  find.oninput = () => (res.innerHTML = matches().slice(0, 5).map(p => `<button class="btn" data-add="${p.id}">${esc(p.name)} <small class="muted">${esc(p.barcode)}</small></button>`).join(''));
+  find.onkeydown = e => {
+    if (e.key !== 'Enter') return;
+    const v = find.value.trim(), m = matches();
+    const p = products.find(x => x.barcode === v) || (m.length === 1 ? m[0] : null);
+    if (p) add(p);
+    else if (v) toast(m.length ? 'Elige un producto de la lista' : 'Producto no encontrado', 'error');
+  };
+  res.onclick = e => { const b = e.target.closest('[data-add]'); if (b) add(products.find(p => p.id === +b.dataset.add)); };
+  const line = e => lines[+e.target.closest('.dline')?.dataset.i];
+  box.oninput = e => { const f = e.target.dataset.f; if (f) { line(e)[f] = e.target.value; paintTotal(); } };
+  box.onclick = async e => {
+    const l = line(e);
+    if (!l) return;
+    if (e.target.closest('[data-rm]')) { lines.splice(lines.indexOf(l), 1); paint(); }
+    else if (e.target.closest('[data-q]')) {
+      const n = await keypad(kg(l) ? 'Cantidad (gramos)' : 'Cantidad', { grams: kg(l) });
+      if (n != null) { l.qty = kg(l) ? n / 1000 : n; paint(); }
+    }
+  };
+  const save = s.$('#save');
+  save.onclick = async () => {
+    if (!lines.length) return shake(find);
+    const domLine = i => box.children[i];
+    for (const [i, l] of lines.entries()) {
+      if (!l.qty) return shake(domLine(i).querySelector('[data-q]'));
+      if (l.cost === '' || !(parseFloat(l.cost) >= 0)) return shake(domLine(i).querySelector('[data-f=cost]'));
+      if (l.counted !== '' && !(parseFloat(l.counted) >= 0)) return shake(domLine(i).querySelector('[data-f=counted]'));
+    }
+    save.disabled = true;
+    try {
+      let supplier_id = sup.value && sup.value !== 'new' ? +sup.value : null;
+      if (sup.value === 'new') {
+        const name = s.$('[name=supname]');
+        if (!name.value.trim()) return shake(name);
+        const created = await call('/suppliers', { name: name.value.trim(), phone: s.$('[name=supphone]').value.trim() });
+        if (!created) return;
+        sup.insertBefore(new Option(created.name, created.id, true, true), sup.lastChild);
+        s.$('#newsup').hidden = true;
+        supplier_id = created.id;
+      }
+      const d = await call('/deliveries', {
+        supplier_id, payment,
+        items: lines.map(l => ({
+          product_id: l.p.id, qty: l.qty, unit_cost: parseFloat(l.cost),
+          expires_at: l.exp || undefined,
+          counted: l.counted === '' ? undefined : parseFloat(l.counted) / (kg(l) ? 1000 : 1),
+        })),
+      });
+      if (!d) return;
+      toast(payment === 'efectivo_caja' ? `Entrega guardada · salen ${money(d.total)} de caja` : 'Entrega guardada', 'ok');
+      s.close(true);
+    } finally { save.disabled = false; }
+  };
+  if (first) add(first);
+  else setTimeout(() => find.focus(), 80);
+  return s.done;
+}
+
+function editSupplier(x) {
+  const s = sheet(`<h2>${x.id ? 'Editar proveedor' : 'Nuevo proveedor'}</h2>
+    <label class="field"><span>Nombre</span><input class="input" name="name" value="${esc(x.name)}" autofocus></label>
+    <label class="field"><span>Teléfono</span><input class="input" name="phone" inputmode="tel" value="${esc(x.phone)}"></label>
+    <label class="field"><span>Nota</span><input class="input" name="note" value="${esc(x.note)}"></label>
+    <label class="field sw"><span>Activo</span><input type="checkbox" class="switch" name="active" ${x.active ? 'checked' : ''}></label>
+    <button class="btn primary big full" id="save">Guardar</button>`);
+  s.$('#save').onclick = async () => {
+    const f = n => s.$(`[name=${n}]`);
+    if (!f('name').value.trim()) return shake(f('name'));
+    if (!(await call('/suppliers', { id: x.id, name: f('name').value.trim(), phone: f('phone').value.trim(), note: f('note').value.trim(), active: +f('active').checked }))) return;
+    toast('Proveedor guardado', 'ok');
+    s.close(true);
+  };
+  return s.done;
+}
+
+function catSheet() {
+  const s = sheet(`<h2>Categorías</h2><div id="list"></div>
+    <div class="crow" style="margin-top:12px"><input class="input" name="new" placeholder="Nueva categoría"><button class="btn primary" id="add" aria-label="Agregar">+</button></div>`);
+  const list = s.$('#list');
+  let cats = [];
+  const paint = async () => {
+    cats = (await call('/catalog'))?.categories || cats;
+    list.innerHTML = cats.map(c => `<div class="crow" data-id="${c.id}"><input class="input" value="${esc(c.name)}" aria-label="Nombre"><button class="iconbtn" data-del aria-label="Borrar" style="width:52px;height:52px">🗑</button></div>`).join('') || '<p class="empty-msg">Sin categorías</p>';
+  };
+  const add = async () => {
+    const input = s.$('[name=new]');
+    if (!input.value.trim()) return shake(input);
+    if (await call('/categories', { name: input.value.trim() })) input.value = '';
+    paint();
+  };
+  list.onchange = async e => {
+    const c = cats.find(x => x.id === +e.target.closest('.crow').dataset.id);
+    await call('/categories', { id: c.id, name: e.target.value, sort: c.sort });
+    paint();
+  };
+  list.onclick = async e => {
+    if (!e.target.closest('[data-del]')) return;
+    const c = cats.find(x => x.id === +e.target.closest('.crow').dataset.id);
+    if (await confirmSheet(`¿Borrar "${c.name}"?`, 'Borrar')) await call(`/categories/${c.id}/delete`, {});
+    paint();
+  };
+  s.$('#add').onclick = add;
+  s.$('[name=new]').onkeydown = e => e.key === 'Enter' && add();
+  paint();
+  return s.done;
+}
+
+function editUser(u) {
+  const s = sheet(`<h2>${u.id ? 'Editar usuario' : 'Nuevo usuario'}</h2>
+    <label class="field"><span>Nombre</span><input class="input" name="name" value="${esc(u.name)}" autofocus></label>
+    <label class="field"><span>PIN de 4 dígitos${u.id ? ' (vacío = no cambiar)' : ''}</span><input class="input big" name="pin" inputmode="numeric" maxlength="4" autocomplete="off"></label>
+    <div class="field"><span>Rol</span><div class="seg"><button data-r="cajero">Cajero</button><button data-r="admin">Administrador</button></div></div>
+    <button class="btn primary big full">Guardar</button>`);
+  let role = u.role;
+  const segs = s.el.querySelectorAll('[data-r]');
+  const pick = r => { role = r; segs.forEach(b => b.classList.toggle('on', b.dataset.r === r)); };
+  segs.forEach(b => (b.onclick = () => pick(b.dataset.r)));
+  pick(role);
+  s.$('[name=pin]').oninput = e => (e.target.value = e.target.value.replace(/\D/g, ''));
+  s.$('.btn.primary').onclick = async () => {
+    const name = s.$('[name=name]'), pin = s.$('[name=pin]');
+    if (!name.value.trim()) return shake(name);
+    if ((pin.value || !u.id) && !/^\d{4}$/.test(pin.value)) return shake(pin);
+    await api('/users', { id: u.id, name: name.value.trim(), pin: pin.value || undefined, role });
+    toast('Usuario guardado', 'ok');
+    s.close();
+    views.usuarios();
+  };
+}
+
+async function route() {
+  let v = location.hash.slice(1) || 'stock';
+  if (!views[v] || (!isAdmin && ADMIN_ONLY.includes(v))) v = 'stock';
+  document.querySelectorAll('.nav').forEach(n => n.classList.toggle('on', n.getAttribute('href') === '#' + v));
+  try { await views[v](); }
+  catch (e) { if (e.status === 401) logout(); }
+}
+addEventListener('hashchange', route);
+pinLogin().then(u => {
+  user = u;
+  isAdmin = u.role === 'admin';
+  if (!isAdmin) document.querySelectorAll('[data-admin]').forEach(n => n.remove());
+  route();
+});
+</script>
+<script src="admin.js"></script>
+</body>
+</html>

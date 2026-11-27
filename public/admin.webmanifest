@@ -1,0 +1,14 @@
+{
+  "name": "Minimarket Gestión",
+  "short_name": "Admin",
+  "start_url": "/admin.html",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#1d5fd6",
+  "theme_color": "#1d5fd6",
+  "icons": [
+    { "src": "/img/icon-admin-256.png", "sizes": "256x256", "type": "image/png" },
+    { "src": "/img/icon-admin-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

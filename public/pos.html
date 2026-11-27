@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Minimarket · Caja</title>
+<link rel="manifest" href="caja.webmanifest">
+<link rel="icon" href="img/icon-caja-256.png">
+<link rel="apple-touch-icon" href="img/icon-caja-256.png">
+<meta name="theme-color" content="#1d5fd6">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="stylesheet" href="app.css">
+<script src="api.js"></script>
+<script src="cart.js"></script>
+<script src="queue.js"></script>
+<script src="scanner.js"></script>
+<style>
+  body { display: flex; flex-direction: column; height: 100dvh; overflow: hidden; padding-top: env(safe-area-inset-top); }
+  .topbar .brand { font-size: 22px; }
+  #who { display: none; }
+  .pill.warn { background: var(--yellow); color: var(--on-yellow); }
+  #banner { padding: 8px 16px; text-align: center; font-weight: 800; background: var(--yellow); color: var(--on-yellow); }
+  main { flex: 1; min-height: 0; }
+
+  #idle { display: grid; align-content: center; gap: 14px; width: min(460px, 100%); margin: 0 auto; padding: 24px 16px; }
+  #start { min-height: 150px; font-size: 34px; }
+
+  #sale { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; }
+  .pick { overflow: auto; padding: 12px 16px 24px; display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+  .scanrow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; }
+  #scan video { max-height: 28dvh; }
+  #scan .input, #scan .btn, #search, .scanrow .btn { min-height: 56px; }
+  .chip { min-height: 52px; }
+  .chips { flex: none; padding-bottom: 4px; }
+  .pgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 140px), 1fr)); gap: 10px; }
+  .pgrid:empty { display: none; }
+  .pbtn { min-height: 72px; padding: 8px 10px; display: flex; flex-direction: column; justify-content: space-between; text-align: left; border-radius: 14px; background: var(--surface); box-shadow: var(--shadow); font-weight: 700; line-height: 1.2; transition: transform .1s; }
+  .pbtn:active { transform: scale(.95); }
+  .pbtn b { color: var(--accent); }
+
+  .order { display: flex; flex-direction: column; gap: 10px; padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); background: var(--surface); border-top: 1px solid var(--line); box-shadow: 0 -10px 30px rgb(0 0 0 / .12); border-radius: 22px 22px 0 0; min-height: 0; }
+  .lines { flex: none; max-height: 22dvh; overflow: auto; min-height: 0; display: flex; flex-direction: column; gap: 8px; }
+  .lines .empty { display: none; }
+  .empty { margin: auto; text-align: center; color: var(--muted); }
+  .empty span { font-size: 44px; display: block; opacity: .5; }
+  .line { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 8px 8px 8px 12px; border-radius: 14px; background: var(--surface-2); }
+  .line .nm { grid-column: 1; grid-row: 1; }
+  .line .stepper { grid-column: 1; grid-row: 2; justify-self: start; }
+  .line .rm { grid-column: 2; grid-row: 1; }
+  .line .nm b { display: block; line-height: 1.2; }
+  .line small { color: var(--muted); }
+  .line strong { display: block; }
+  .stepper { display: flex; align-items: center; background: var(--surface); border-radius: 12px; }
+  .stepper button { width: 48px; height: 48px; border-radius: 12px; font-size: 24px; font-weight: 800; }
+  .stepper button:active { background: var(--surface-2); }
+  .stepper .q { width: auto; min-width: 56px; padding: 0 6px; font-size: 16px; }
+  .line .rm { height: 44px; min-width: 44px; border-radius: 10px; color: var(--muted); font-size: 18px; }
+  .total-row { display: flex; align-items: baseline; justify-content: space-between; border-top: 1px dashed var(--line); padding-top: 6px; }
+  .total-row strong { font-size: clamp(28px, 9vw, 42px); font-weight: 900; letter-spacing: -.03em; }
+  .actions { display: grid; grid-template-columns: 72px 1fr; gap: 10px; }
+  #pay { font-size: 24px; min-height: 72px; }
+
+  .pay-total { font-size: clamp(36px, 12vw, 54px); font-weight: 900; letter-spacing: -.03em; margin: -4px 0 14px; }
+  .pay-methods { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .pay-methods .btn { min-height: 76px; font-size: 22px; }
+  .btn.qr { background: var(--text); color: var(--bg); }
+  .upl { cursor: pointer; margin-top: 10px; }
+  .upl:first-of-type { margin-top: 0; }
+
+  .menu-list { display: grid; gap: 6px; }
+  .menu-list > * { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 58px; padding: 8px 16px; border-radius: 14px; background: var(--surface-2); font-weight: 700; text-align: left; }
+  .menu-list button:active { transform: scale(.98); }
+  .menu-list small { font-weight: 400; color: var(--muted); display: block; }
+
+  .success { position: fixed; inset: 0; z-index: 90; display: grid; place-items: center; background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(6px); animation: fade .2s; transition: opacity .3s; }
+  .success.out { opacity: 0; }
+  .success-box { text-align: center; animation: rise .4s var(--spring); }
+  .check { width: 110px; height: 110px; }
+  .check circle { fill: var(--green); transform-origin: center; animation: pop .5s var(--spring); }
+  .check path { fill: none; stroke: var(--on-green); stroke-width: 4.5; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 40; stroke-dashoffset: 40; animation: draw .4s .25s var(--ease) forwards; }
+  @keyframes draw { to { stroke-dashoffset: 0; } }
+  .total-big { font-size: var(--fs-big); font-weight: 900; line-height: 1; letter-spacing: -.03em; color: var(--accent); }
+  .change-big { font-size: 34px; font-weight: 900; color: var(--green); margin: 10px 0 0; }
+
+  @media (min-width: 860px) {
+    #sale { grid-template-columns: minmax(0, 1fr) minmax(340px, 420px); grid-template-rows: none; }
+    .order { border-top: 0; border-left: 1px solid var(--line); box-shadow: none; border-radius: 0; }
+    .lines { flex: 1; max-height: none; }
+    .line { grid-template-columns: 1fr auto 40px; }
+    .line .nm, .line .stepper, .line .rm { grid-column: auto; grid-row: auto; }
+    .lines .empty { display: block; }
+    #who { display: inline-flex; }
+  }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <span class="brand"><span class="chick" aria-hidden="true">🛒</span>Caja</span>
+  <span class="pill" id="who"></span>
+  <span class="pill warn" id="pend" hidden></span>
+  <span class="spacer"></span>
+  <button class="iconbtn" data-theme-toggle aria-label="Cambiar tema"><span class="sun">☀︎</span><span class="moon">☾</span></button>
+  <button class="iconbtn" id="more" aria-label="Más opciones">⋯</button>
+</header>
+<div id="banner" role="status" hidden>Sin conexión con el PC: cobra solo en este teléfono</div>
+<main id="idle">
+  <button class="btn primary big full" id="start">🛒 Venta</button>
+  <div class="row2" style="margin:0">
+    <button class="btn big" id="cash">💸 Ingreso / Gasto</button>
+    <button class="btn big ghost" id="out">⏻ Salir</button>
+  </div>
+</main>
+<main id="sale" hidden>
+  <section class="pick">
+    <div id="scan" class="scanbox"></div>
+    <div class="scanrow"><input class="input" id="search" type="search" placeholder="Buscar por nombre o marca" autocomplete="off"><button class="btn" id="end">Terminar</button></div>
+    <nav class="chips" id="chips"></nav>
+    <div class="pgrid" id="grid"></div>
+  </section>
+  <aside class="order">
+    <div class="lines" id="lines"></div>
+    <div class="total-row"><span class="muted">Total</span><strong id="total">Bs 0.00</strong></div>
+    <div class="actions">
+      <button class="btn big ghost" id="clear" aria-label="Limpiar venta">🗑</button>
+      <button class="btn primary big" id="pay" disabled>Cobrar</button>
+    </div>
+  </aside>
+</main>
+<script src="caja.js"></script>
+</body>
+</html>

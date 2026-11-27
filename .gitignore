@@ -1,0 +1,11 @@
+*.db
+*.db-*
+receipts/
+.superpowers/
+.playwright-mcp/
+*-receipts/
+copias/
+docs/
+archivo/
+prototipos/
+CLAUDE.md
